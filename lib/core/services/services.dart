@@ -1,1 +1,1 @@
-// Core services will be defined here
+export 'supabase_service.dart';
