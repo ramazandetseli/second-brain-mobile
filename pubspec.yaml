@@ -45,6 +45,9 @@ dependencies:
   record: ^5.1.2
   audioplayers: ^6.1.0
 
+  # Path provider for file access
+  path_provider: ^2.1.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
