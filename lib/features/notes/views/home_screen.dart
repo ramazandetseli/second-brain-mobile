@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/notes_provider.dart';
+import '../providers/audio_recording_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -8,6 +9,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notes = ref.watch(notesProvider);
+    final isRecording = ref.watch(audioRecordingProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -85,10 +87,50 @@ class HomeScreen extends ConsumerWidget {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          debugPrint('Mikrofon butonuna tıklandı');
+        onPressed: () async {
+          if (isRecording) {
+            try {
+              final audioPath = await ref.read(audioRecordingProvider.notifier).stopRecording();
+              if (audioPath != null) {
+                final newNote = ref.read(notesProvider.notifier).createNoteDraft(
+                      audioPath: audioPath,
+                    );
+                ref.read(notesProvider.notifier).addNote(newNote);
+                
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Kayıt tamamlandı, not oluşturuldu')),
+                  );
+                }
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Kayıt durdurulurken hata: $e')),
+                );
+              }
+            }
+          } else {
+            try {
+              await ref.read(audioRecordingProvider.notifier).startRecording();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Kayıt başladı')),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Kayıt başlatılamadı: $e')),
+                );
+              }
+            }
+          }
         },
-        child: const Icon(Icons.mic),
+        backgroundColor: isRecording 
+            ? Theme.of(context).colorScheme.error 
+            : Theme.of(context).colorScheme.primary,
+        child: Icon(isRecording ? Icons.stop : Icons.mic),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
