@@ -1,120 +1,105 @@
 import 'dart:io';
-import 'package:record/record.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class AudioRecordingService {
   static final AudioRecordingService _instance = AudioRecordingService._internal();
   factory AudioRecordingService() => _instance;
   AudioRecordingService._internal();
 
-  final AudioRecorder _recorder = AudioRecorder();
+  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
+  bool _isRecorderInitialized = false;
   bool _isRecording = false;
   String? _currentRecordingPath;
 
   bool get isRecording => _isRecording;
   String? get currentRecordingPath => _currentRecordingPath;
 
+  Future<void> _initRecorder() async {
+    if (!_isRecorderInitialized) {
+      await _recorder.openRecorder();
+      _isRecorderInitialized = true;
+    }
+  }
+
   Future<bool> hasPermission() async {
-    return await _recorder.hasPermission();
+    final status = await Permission.microphone.request();
+    return status.isGranted;
   }
 
   Future<void> startRecording() async {
     if (_isRecording) {
-      throw Exception('Recording is already in progress');
+      throw Exception('Kayıt zaten devam ediyor');
     }
 
     if (!await hasPermission()) {
-      throw Exception('Microphone permission not granted');
+      throw Exception('Mikrofon izni verilmedi');
     }
+
+    await _initRecorder();
 
     try {
       final directory = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      _currentRecordingPath = '${directory.path}/recording_$timestamp.m4a';
+      _currentRecordingPath = '${directory.path}/recording_$timestamp.aac';
 
-      await _recorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        path: _currentRecordingPath!,
+      await _recorder.startRecorder(
+        toFile: _currentRecordingPath,
+        codec: Codec.aacADTS,
       );
 
       _isRecording = true;
     } catch (e) {
       _isRecording = false;
       _currentRecordingPath = null;
-      throw Exception('Failed to start recording: $e');
+      throw Exception('Kayıt başlatılamadı: $e');
     }
   }
 
   Future<String?> stopRecording() async {
     if (!_isRecording) {
-      throw Exception('No recording in progress');
+      throw Exception('Aktif bir kayıt yok');
     }
 
     try {
-      final path = await _recorder.stop();
+      final path = await _recorder.stopRecorder();
+      _isRecording = false;
+      final savedPath = _currentRecordingPath;
+      _currentRecordingPath = null;
+      return path ?? savedPath;
+    } catch (e) {
       _isRecording = false;
       _currentRecordingPath = null;
-      return path;
-    } catch (e) {
-      _isRecording = false;
-      _currentRecordingPath = null;
-      throw Exception('Failed to stop recording: $e');
-    }
-  }
-
-  Future<void> pauseRecording() async {
-    if (!_isRecording) {
-      throw Exception('No recording in progress');
-    }
-
-    try {
-      await _recorder.pause();
-    } catch (e) {
-      throw Exception('Failed to pause recording: $e');
-    }
-  }
-
-  Future<void> resumeRecording() async {
-    if (!_isRecording) {
-      throw Exception('No recording in progress');
-    }
-
-    try {
-      await _recorder.resume();
-    } catch (e) {
-      throw Exception('Failed to resume recording: $e');
+      throw Exception('Kayıt durdurulamadı: $e');
     }
   }
 
   Future<void> cancelRecording() async {
-    if (!_isRecording) {
-      return;
-    }
+    if (!_isRecording) return;
 
     try {
-      await _recorder.stop();
-      
+      await _recorder.stopRecorder();
       if (_currentRecordingPath != null) {
         final file = File(_currentRecordingPath!);
         if (await file.exists()) {
           await file.delete();
         }
       }
-      
       _isRecording = false;
       _currentRecordingPath = null;
     } catch (e) {
       _isRecording = false;
       _currentRecordingPath = null;
-      throw Exception('Failed to cancel recording: $e');
+      throw Exception('Kayıt iptal edilemedi: $e');
     }
   }
 
   void dispose() {
-    _recorder.dispose();
+    if (_isRecorderInitialized) {
+      _recorder.closeRecorder();
+      _isRecorderInitialized = false;
+    }
   }
 }

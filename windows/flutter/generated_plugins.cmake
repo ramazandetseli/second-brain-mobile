@@ -5,7 +5,8 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   audioplayers_windows
-  record_windows
+  flutter_sound
+  permission_handler_windows
   url_launcher_windows
 )
 
