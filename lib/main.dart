@@ -9,7 +9,7 @@ void main() async {
   try {
     await SupabaseService().initialize();
   } catch (e) {
-    print('Supabase initialization failed: $e');
+    debugPrint('Supabase initialization failed: $e');
   }
   
   runApp(const ProviderScope(child: MyApp()));
