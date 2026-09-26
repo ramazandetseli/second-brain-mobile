@@ -1,1 +1,1 @@
-// Notes feature will be implemented here
+export 'models/models.dart';
