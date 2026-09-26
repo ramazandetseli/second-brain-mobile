@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/supabase_service.dart';
+import 'features/notes/notes.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,11 +24,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Second Brain',
       theme: AppTheme.darkTheme,
-      home: const Scaffold(
-        body: Center(
-          child: Text('Second Brain'),
-        ),
-      ),
+      home: const HomeScreen(),
     );
   }
 }
