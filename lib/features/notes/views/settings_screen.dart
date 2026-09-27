@@ -129,8 +129,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
 
     if (confirmed == true) {
-      if (!kIsWeb) {
-        try {
+      try {
+        // 1. Dosya sistemini temizle (Sadece Mobilde)
+        if (!kIsWeb) {
           final dir = await getApplicationDocumentsDirectory();
           final files = dir.listSync();
           for (final file in files) {
@@ -141,17 +142,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               } catch (_) {}
             }
           }
-        } catch (_) {}
-      }
+        }
 
-      // Not listesini tamamen temizle
-      final notes = ref.read(notesProvider);
-      for (final note in notes) {
-        ref.read(notesProvider.notifier).deleteNote(note.id);
-      }
+        // 2. Riverpod ve SQLite'ı temizle
+        await ref.read(notesProvider.notifier).clearAllNotes();
 
-      await _calculateStorage();
-      _showSnackBar('Uygulama sıfırlandı, tüm veriler silindi.');
+        // 3. Depolama sayacını güncelle
+        await _calculateStorage();
+
+        _showSnackBar('Uygulama sıfırlandı, tüm veriler silindi.');
+      } catch (e) {
+        _showSnackBar('Sıfırlama sırasında bir hata oluştu: $e', isError: true);
+      }
     }
   }
 
