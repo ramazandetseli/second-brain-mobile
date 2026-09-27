@@ -45,8 +45,15 @@ class NotesNotifier extends StateNotifier<List<NoteModel>> {
   void clearNotes() {
     state = [];
   }
+
+  void clearAllNotes() {
+    state = [];
+  }
+  
 }
 
 final notesProvider = StateNotifierProvider<NotesNotifier, List<NoteModel>>((ref) {
   return NotesNotifier();
 });
+
+
