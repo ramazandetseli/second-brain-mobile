@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/note_model.dart';
 import '../providers/notes_provider.dart';
@@ -129,14 +129,19 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Provider'dan notun en güncel halini al
+
     final currentNote = ref.watch(notesProvider).firstWhere(
           (n) => n.id == widget.note.id,
           orElse: () => widget.note,
         );
-
+    
     final hasAudio = currentNote.audioPath != null;
-    final isPlaying = _playerState == PlayerState.playing;
+    final _isPlaying = _playerState == PlayerState.playing;
+    
+    
+    final hasAudioPath = currentNote.audioPath != null;
+    final isAudioOnDisk = hasAudioPath && File(currentNote.audioPath!).existsSync();
+    final isAudioDeleted = hasAudioPath && !isAudioOnDisk;
 
     return Scaffold(
       appBar: AppBar(
@@ -229,39 +234,128 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
 
               const SizedBox(height: 16),
 
-              // Varsa Ses Oynatıcı Barı
-              if (hasAudio) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton.filled(
-                        icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                        onPressed: () => _handlePlayAudio(currentNote.audioPath),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          isPlaying ? 'Kayıt oynatılıyor...' : 'Orijinal Ses Kaydını Dinle',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        Icons.graphic_eq_rounded,
-                        color: isPlaying ? theme.colorScheme.primary : theme.colorScheme.outline,
-                      ),
-                    ],
-                  ),
+              if (isAudioOnDisk) ...[
+  Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+      ),
+    ),
+    child: Row(
+      children: [
+        IconButton.filled(
+          icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+          onPressed: () => _handlePlayAudio(currentNote.audioPath!),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _isPlaying ? 'Ses Kaydı Oynatılıyor' : 'Kayıtlı Sesi Dinle',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Orijinal ses kaydı',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
-                const SizedBox(height: 20),
-              ],
+              ),
+            ],
+          ),
+        ),
+        Icon(
+          Icons.graphic_eq_rounded,
+          color: _isPlaying
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+        ),
+      ],
+    ),
+  ),
+  const SizedBox(height: 16),
+]
+// 2. Ses yolu var ama fiziksel dosya silinmişse: Bilgilendirme Rozeti
+else if (isAudioDeleted) ...[
+  Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25),
+      ),
+    ),
+    child: Row(
+      children: [
+        Icon(
+          Icons.mic_off_rounded,
+          size: 18,
+          color: theme.colorScheme.error.withValues(alpha: 0.75),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Ses dosyası depolama tasarrufu için temizlenmiş. Transkript ve özet metinleri korunuyor.',
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  const SizedBox(height: 16),
+],
+              // Varsa AI Özeti Kartı
+if (currentNote.summary != null && currentNote.summary!.isNotEmpty) ...[
+  Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: theme.colorScheme.primary.withValues(alpha: 0.3),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.auto_awesome_rounded, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(
+              'YAPAY ZEKA ÖZETİ',
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.8,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SelectableText(
+          currentNote.summary!,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            height: 1.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    ),
+  ),
+  const SizedBox(height: 20),
+],
 
               // İçerik / Transkript Alanı
               Text(

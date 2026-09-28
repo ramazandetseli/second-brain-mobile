@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../models/note_model.dart';
 
@@ -20,7 +21,11 @@ class NoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasAudio = note.audioPath != null;
+
+    // 1. Ses yolu var mı ve fiziksel dosya gerçekten diskte duruyor mu kontrolü:
+    final hasAudioPath = note.audioPath != null;
+    final isAudioOnDisk = hasAudioPath && File(note.audioPath!).existsSync();
+    final isAudioDeleted = hasAudioPath && !isAudioOnDisk;
 
     return Dismissible(
       key: Key(note.id),
@@ -54,29 +59,82 @@ class NoteCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Etiket ve Tarih
+                // Etiketler, Kategori ve Tarih
                 Row(
                   children: [
+                    // Tip Rozeti
+                    if (isAudioDeleted)
+                      // Ses silinmişse: Kırık ses rozeti
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.errorContainer.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.mic_off_rounded,
+                              size: 13,
+                              color: theme.colorScheme.error,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Ses Silindi',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      // Normal rozet (Ses veya Metin)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isAudioOnDisk
+                              ? theme.colorScheme.primaryContainer
+                              : theme.colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isAudioOnDisk ? 'Ses Notu' : 'Metin Notu',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isAudioOnDisk
+                                ? theme.colorScheme.onPrimaryContainer
+                                : theme.colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+
+                    const SizedBox(width: 8),
+
+                    // Kategori Rozeti (#Genel, #Projeler vb.)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: hasAudio
-                            ? theme.colorScheme.primaryContainer
-                            : theme.colorScheme.secondaryContainer,
+                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        hasAudio ? 'Ses Notu' : 'Metin Notu',
+                        '#${note.category}',
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: hasAudio
-                              ? theme.colorScheme.onPrimaryContainer
-                              : theme.colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w500,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
+
                     const Spacer(),
+
+                    // Tarih
                     Text(
                       '${note.createdAt.day}.${note.createdAt.month}.${note.createdAt.year}',
                       style: TextStyle(
@@ -86,12 +144,18 @@ class NoteCard extends StatelessWidget {
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 12),
+
+                // Başlık
                 Text(
                   note.title,
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
+
                 const SizedBox(height: 4),
+
+                // İçerik
                 Text(
                   note.content,
                   maxLines: 2,
@@ -101,8 +165,9 @@ class NoteCard extends StatelessWidget {
                     fontSize: 14,
                   ),
                 ),
-                // Ses Barı (Yalnızca ses varsa çizilir)
-                if (hasAudio) ...[
+
+                // 🎯 Oynatıcı Barı: YALNIZCA fiziksel ses dosyası diskte VARSA çizilir
+                if (isAudioOnDisk) ...[
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
