@@ -2,6 +2,7 @@ class NoteModel {
   final String id;
   final String title;
   final String content;
+  final String category;
   final String? summary;
   final String? audioPath;
   final DateTime createdAt;
@@ -11,6 +12,7 @@ class NoteModel {
     required this.id,
     required this.title,
     required this.content,
+    this.category = 'General',
     this.summary,
     this.audioPath,
     required this.createdAt,
@@ -21,6 +23,7 @@ class NoteModel {
     String? id,
     String? title,
     String? content,
+    String? category,
     String? summary,
     String? audioPath,
     DateTime? createdAt,
@@ -30,6 +33,7 @@ class NoteModel {
       id: id ?? this.id,
       title: title ?? this.title,
       content: content ?? this.content,
+      category: category ?? this.category,
       summary: summary ?? this.summary,
       audioPath: audioPath ?? this.audioPath,
       createdAt: createdAt ?? this.createdAt,

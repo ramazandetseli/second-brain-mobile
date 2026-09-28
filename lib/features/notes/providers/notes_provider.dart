@@ -50,12 +50,17 @@ class NotesNotifier extends StateNotifier<List<NoteModel>> {
   }
 
 
-  Future<void> addTextNote({required String title, required String content}) async {
+  Future<void> addTextNote({
+    required String title,
+    required String content,
+    String category = 'Genel',
+  }) async {
     final newNote = NoteModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: title.trim().isEmpty ? 'Başlıksız Not' : title.trim(),
       content: content.trim(),
-      audioPath: null, // Ses kaydı yok
+      category: category.trim().isEmpty ? 'Genel' : category.trim(),
+      audioPath: null,
       createdAt: DateTime.now(),
       isSynced: false,
     );

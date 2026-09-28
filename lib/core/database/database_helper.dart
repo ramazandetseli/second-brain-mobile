@@ -35,6 +35,7 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'Genel',
         summary TEXT,
         audio_path TEXT,
         created_at TEXT NOT NULL,
