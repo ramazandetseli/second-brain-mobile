@@ -17,9 +17,6 @@ class SettingsScreen extends ConsumerWidget {
 
     if (confirmed == true) {
       await ref.read(storageStateProvider.notifier).clearOnlyAudioFiles();
-      if (context.mounted) {
-        _showSnackBar(context, 'Ses dosyaları silindi, metinler korundu.');
-      }
     }
   }
 
@@ -34,9 +31,6 @@ class SettingsScreen extends ConsumerWidget {
 
     if (confirmed == true) {
       await ref.read(storageStateProvider.notifier).resetEntireApp();
-      if (context.mounted) {
-        _showSnackBar(context, 'Uygulama sıfırlandı, tüm veriler silindi.');
-      }
     }
   }
 

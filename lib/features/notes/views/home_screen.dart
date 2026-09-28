@@ -3,6 +3,11 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:second_brain/core/services/note_summarizer_service.dart';
+import 'package:second_brain/features/notes/providers/note_processing_provider.dart';
+import 'package:second_brain/features/notes/providers/summarizer_provider.dart';
+import 'package:second_brain/features/notes/providers/transcription_provider.dart';
+import 'package:second_brain/features/notes/views/widgets/home/processing_card_wrapper.dart';
 import '../../../core/services/audio_recording_service.dart';
 import '../models/note_model.dart';
 import '../providers/notes_provider.dart';
@@ -102,21 +107,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _startTimer();
         setState(() => _isRecording = true);
       } else {
+    
+
         _stopTimer();
         final path = await _audioService.stopRecording();
         setState(() => _isRecording = false);
 
-        if (path != null) {
+         if (path != null) {
           final now = DateTime.now();
-          ref.read(notesProvider.notifier).addNote(
-                NoteModel(
-                  id: now.millisecondsSinceEpoch.toString(),
-                  title: 'Ses Kaydı (${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')})',
-                  content: 'Ses kaydedildi. Transkript bekleniyor...',
-                  audioPath: path,
-                  createdAt: now,
-                ),
-              );
+          final noteId = now.millisecondsSinceEpoch.toString();
+
+          final initialNote = NoteModel(
+            id: noteId,
+            title: 'Yeni Ses Kaydı',
+            content: 'Ses işleniyor...',
+            audioPath: path,
+            category: 'Genel',
+            createdAt: now,
+          );
+
+          // 1. Not listeye girdi
+          await ref.read(notesProvider.notifier).addNote(initialNote);
+
+          // 2. Transkript aşaması (Cyan Işık Başlar)
+          ref.read(noteProcessingProvider(noteId).notifier).state = NoteProcessingState.transcribing;
+
+          try {
+            // API çağrısı ve minimum 1.2 sn animasyon süresi garantisi
+            final results = await Future.wait([
+              ref.read(transcriptionServiceProvider).transcribeAudio(audioFilePath: path),
+              Future.delayed(const Duration(milliseconds: 1200)), // Gözün efekti görmesi için
+            ]);
+
+            final transcript = results[0] as String;
+
+            await ref.read(notesProvider.notifier).updateNote(
+              initialNote.copyWith(content: transcript),
+            );
+
+            // 3. AI Özetleme aşaması (Mor Işığa Geçiş)
+            ref.read(noteProcessingProvider(noteId).notifier).state = NoteProcessingState.summarizing;
+
+            final aiResults = await Future.wait([
+              ref.read(summarizerServiceProvider).summarizeTranscript(transcript),
+              Future.delayed(const Duration(milliseconds: 1400)), // Mor ışık ve analiz için bekleme
+            ]);
+
+            final aiResult = aiResults[0] as NoteAiResult;
+
+            // 4. Veritabanını güncelle
+            final finalizedNote = initialNote.copyWith(
+              title: aiResult.title,
+              content: transcript,
+              summary: aiResult.summary,
+              category: aiResult.category,
+            );
+            await ref.read(notesProvider.notifier).updateNote(finalizedNote);
+
+            // 5. Tamamlandı (3 Kez Yeşil Flaş Yanar ve Biter)
+            ref.read(noteProcessingProvider(noteId).notifier).state = NoteProcessingState.completed;
+
+          } catch (e) {
+            ref.read(noteProcessingProvider(noteId).notifier).state = NoteProcessingState.idle;
+            await ref.read(notesProvider.notifier).updateNote(
+              initialNote.copyWith(content: 'Hata oluştu: $e'),
+            );
+          }
         }
       }
     } catch (_) {
@@ -185,8 +241,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       itemCount: notes.length,
                       itemBuilder: (context, index) {
                         final note = notes[index];
-                        return NoteCard(
-                          note: note,
+  return ProcessingCardWrapper(
+    noteId: note.id,
+    child: NoteCard(
+      note: note,
                           isPlaying: _currentlyPlayingPath == note.audioPath &&
                               _playerState == PlayerState.playing,
                           onPlayAudio: () => _handlePlayAudio(note.audioPath),
@@ -198,8 +256,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           onDelete: () =>
                               ref.read(notesProvider.notifier).deleteNote(note.id),
-                        );
-                      },
+                        ),
+                  );
+                  },
                     ),
             ),
           ],

@@ -43,11 +43,14 @@ class AudioRecordingService {
     try {
       final directory = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      _currentRecordingPath = '${directory.path}/recording_$timestamp.aac';
+      
+      // 1. Değişiklik: .aac yerine .m4a
+      _currentRecordingPath = '${directory.path}/recording_$timestamp.m4a';
 
+      // 2. Değişiklik: aacADTS yerine aacMP4
       await _recorder.startRecorder(
         toFile: _currentRecordingPath,
-        codec: Codec.aacADTS,
+        codec: Codec.aacMP4,
       );
 
       _isRecording = true;

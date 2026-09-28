@@ -5,6 +5,7 @@ class NoteModel {
   final String category;
   final String? summary;
   final String? audioPath;
+  
   final DateTime createdAt;
   final bool isSynced;
 
@@ -26,6 +27,7 @@ class NoteModel {
     String? category,
     String? summary,
     String? audioPath,
+    bool clearAudioPath = false,
     DateTime? createdAt,
     bool? isSynced,
   }) {
@@ -35,7 +37,7 @@ class NoteModel {
       content: content ?? this.content,
       category: category ?? this.category,
       summary: summary ?? this.summary,
-      audioPath: audioPath ?? this.audioPath,
+      audioPath: clearAudioPath ? null : (audioPath ?? this.audioPath),
       createdAt: createdAt ?? this.createdAt,
       isSynced: isSynced ?? this.isSynced,
     );
