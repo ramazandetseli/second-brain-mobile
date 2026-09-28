@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,14 +15,12 @@ class NoteDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  PlayerState _playerState = PlayerState.stopped;
+
+  bool _isEditing = false;
   late TextEditingController _titleController;
   late TextEditingController _contentController;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-
-  PlayerState _playerState = PlayerState.stopped;
-  Duration _duration = Duration.zero;
-  Duration _position = Duration.zero;
-  bool _hasChanges = false;
 
   @override
   void initState() {
@@ -29,224 +28,289 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
     _titleController = TextEditingController(text: widget.note.title);
     _contentController = TextEditingController(text: widget.note.content);
 
-    _initAudioPlayer();
-  }
-
-  void _initAudioPlayer() {
-    if (widget.note.audioPath == null) return;
-
     _audioPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) setState(() => _playerState = state);
-    });
-
-    _audioPlayer.onDurationChanged.listen((d) {
-      if (mounted) setState(() => _duration = d);
-    });
-
-    _audioPlayer.onPositionChanged.listen((p) {
-      if (mounted) setState(() => _position = p);
-    });
-
-    _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) {
-        setState(() {
-          _position = Duration.zero;
-          _playerState = PlayerState.stopped;
-        });
+        setState(() => _playerState = state);
       }
     });
-
-    // Kayıtlı ses dosyasını hazırla ve süresini al
-    _audioPlayer.setSource(DeviceFileSource(widget.note.audioPath!));
   }
 
   @override
   void dispose() {
+    _audioPlayer.dispose();
     _titleController.dispose();
     _contentController.dispose();
-    _audioPlayer.dispose();
     super.dispose();
   }
 
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  Future<void> _toggleAudio() async {
-    if (widget.note.audioPath == null) return;
+  Future<void> _handlePlayAudio(String? path) async {
+    if (path == null) return;
+    if (!File(path).existsSync()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ses dosyası diskte bulunamadı.')),
+      );
+      return;
+    }
 
     if (_playerState == PlayerState.playing) {
       await _audioPlayer.pause();
+    } else if (_playerState == PlayerState.paused) {
+      await _audioPlayer.resume();
     } else {
-      await _audioPlayer.play(DeviceFileSource(widget.note.audioPath!));
+      await _audioPlayer.stop();
+      await _audioPlayer.play(DeviceFileSource(path));
     }
   }
 
-  void _saveChanges() {
-    final updatedNote = NoteModel(
-      id: widget.note.id,
-      title: _titleController.text.trim(),
-      content: _contentController.text.trim(),
-      audioPath: widget.note.audioPath,
-      createdAt: widget.note.createdAt,
-      isSynced: false,
+  Future<void> _saveChanges(NoteModel currentNote) async {
+    final updatedTitle = _titleController.text.trim();
+    final updatedContent = _contentController.text.trim();
+
+    if (updatedContent.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not içeriği boş bırakılamaz.')),
+      );
+      return;
+    }
+
+    final updatedNote = currentNote.copyWith(
+      title: updatedTitle.isEmpty ? 'Başlıksız Not' : updatedTitle,
+      content: updatedContent,
     );
 
-    ref.read(notesProvider.notifier).updateNote(updatedNote);
+    await ref.read(notesProvider.notifier).updateNote(updatedNote);
 
-    setState(() => _hasChanges = false);
+    if (mounted) {
+      setState(() => _isEditing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Değişiklikler kaydedildi.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Not güncellendi'),
-        behavior: SnackBarBehavior.floating,
+  void _cancelEditing(NoteModel currentNote) {
+    setState(() {
+      _titleController.text = currentNote.title;
+      _contentController.text = currentNote.content;
+      _isEditing = false;
+    });
+  }
+
+  Future<void> _deleteNote(String id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Notu Sil'),
+        content: const Text('Bu notu silmek istediğinden emin misin?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('İptal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sil'),
+          ),
+        ],
       ),
     );
+
+    if (confirm == true && mounted) {
+      await ref.read(notesProvider.notifier).deleteNote(id);
+      if (mounted) Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasAudio = widget.note.audioPath != null;
+
+    // Provider'dan notun en güncel halini al
+    final currentNote = ref.watch(notesProvider).firstWhere(
+          (n) => n.id == widget.note.id,
+          orElse: () => widget.note,
+        );
+
+    final hasAudio = currentNote.audioPath != null;
+    final isPlaying = _playerState == PlayerState.playing;
 
     return Scaffold(
       appBar: AppBar(
+        title: Text(_isEditing ? 'Notu Düzenle' : ''),
         actions: [
-          if (_hasChanges)
+          if (_isEditing) ...[
+            TextButton(
+              onPressed: () => _cancelEditing(currentNote),
+              child: const Text('İptal'),
+            ),
             IconButton(
-              icon: const Icon(Icons.check_rounded),
+              icon: const Icon(Icons.check_rounded, color: Colors.green),
               tooltip: 'Kaydet',
-              onPressed: _saveChanges,
+              onPressed: () => _saveChanges(currentNote),
             ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded),
-            tooltip: 'Sil',
-            onPressed: () {
-              ref.read(notesProvider.notifier).deleteNote(widget.note.id);
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Ses Çalma ve İlerleme Çubuğu Kartı
-            if (hasAudio) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        IconButton.filled(
-                          iconSize: 28,
-                          icon: Icon(
-                            _playerState == PlayerState.playing
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                          ),
-                          onPressed: _toggleAudio,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Ses Kaydı',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 4,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      ),
-                      child: Slider(
-                        min: 0.0,
-                        max: _duration.inMilliseconds.toDouble() > 0
-                            ? _duration.inMilliseconds.toDouble()
-                            : 1.0,
-                        value: _position.inMilliseconds
-                            .toDouble()
-                            .clamp(0.0, _duration.inMilliseconds.toDouble()),
-                        onChanged: (val) async {
-                          final target = Duration(milliseconds: val.toInt());
-                          await _audioPlayer.seek(target);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-
-            // Başlık Alanı
-            TextField(
-              controller: _titleController,
-              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(
-                hintText: 'Başlık',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-              onChanged: (_) {
-                if (!_hasChanges) setState(() => _hasChanges = true);
-              },
+          ] else ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Düzenle',
+              onPressed: () => setState(() => _isEditing = true),
             ),
-            const SizedBox(height: 8),
-
-            // Tarih Etiketi
-            Text(
-              '${widget.note.createdAt.day}.${widget.note.createdAt.month}.${widget.note.createdAt.year} · ${widget.note.createdAt.hour.toString().padLeft(2, '0')}:${widget.note.createdAt.minute.toString().padLeft(2, '0')}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
-            ),
-            const Divider(height: 28),
-
-            // İçerik Alanı
-            TextField(
-              controller: _contentController,
-              maxLines: null,
-              keyboardType: TextInputType.multiline,
-              style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
-              decoration: const InputDecoration(
-                hintText: 'Transkript veya not içeriği...',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-              onChanged: (_) {
-                if (!_hasChanges) setState(() => _hasChanges = true);
-              },
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded),
+              tooltip: 'Sil',
+              onPressed: () => _deleteNote(currentNote.id),
             ),
           ],
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Tür Etiketi ve Tarih
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: hasAudio
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      hasAudio ? 'Ses Notu' : 'Metin Notu',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: hasAudio
+                            ? theme.colorScheme.onPrimaryContainer
+                            : theme.colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${currentNote.createdAt.day}.${currentNote.createdAt.month}.${currentNote.createdAt.year} '
+                    '${currentNote.createdAt.hour.toString().padLeft(2, '0')}:${currentNote.createdAt.minute.toString().padLeft(2, '0')}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Başlık Alanı
+              if (_isEditing)
+                TextField(
+                  controller: _titleController,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  decoration: const InputDecoration(
+                    hintText: 'Başlık',
+                    border: UnderlineInputBorder(),
+                  ),
+                )
+              else
+                SelectableText(
+                  currentNote.title,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+
+              const SizedBox(height: 16),
+
+              // Varsa Ses Oynatıcı Barı
+              if (hasAudio) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton.filled(
+                        icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                        onPressed: () => _handlePlayAudio(currentNote.audioPath),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isPlaying ? 'Kayıt oynatılıyor...' : 'Orijinal Ses Kaydını Dinle',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.graphic_eq_rounded,
+                        color: isPlaying ? theme.colorScheme.primary : theme.colorScheme.outline,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              // İçerik / Transkript Alanı
+              Text(
+                'İÇERİK',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              if (_isEditing)
+                TextField(
+                  controller: _contentController,
+                  textCapitalization: TextCapitalization.sentences,
+                  maxLines: null,
+                  minLines: 8,
+                  decoration: InputDecoration(
+                    hintText: 'Not içeriği...',
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerLow,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: SelectableText(
+                    currentNote.content,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      height: 1.6,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

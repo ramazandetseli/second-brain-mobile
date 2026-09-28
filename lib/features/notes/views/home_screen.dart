@@ -7,10 +7,10 @@ import '../../../core/services/audio_recording_service.dart';
 import '../models/note_model.dart';
 import '../providers/notes_provider.dart';
 import 'note_detail_screen.dart';
-import 'widgets/add_note_bottom_sheet.dart';
-import 'widgets/empty_notes_view.dart';
-import 'widgets/home_header.dart';
-import 'widgets/note_card.dart';
+import 'widgets/home/add_note_bottom_sheet.dart';
+import 'widgets/home/empty_notes_view.dart';
+import 'widgets/home/home_header.dart';
+import 'widgets/home/note_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -30,7 +30,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String? _currentlyPlayingPath;
   PlayerState _playerState = PlayerState.stopped;
   String _searchQuery = '';
-
+  String _selectedFilter = 'all';
   @override
   void initState() {
     super.initState();
@@ -136,27 +136,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     final allNotes = ref.watch(notesProvider);
+
+    // Hem arama kelimesine hem de seçili çipe göre filtrele
     final notes = allNotes.where((note) {
+      // 1. Arama filtresi
       final q = _searchQuery.toLowerCase();
-      return note.title.toLowerCase().contains(q) || note.content.toLowerCase().contains(q);
+      final matchesSearch =
+          note.title.toLowerCase().contains(q) || note.content.toLowerCase().contains(q);
+
+      // 2. Biçim (Çip) filtresi
+      final matchesFormat = switch (_selectedFilter) {
+        'audio' => note.audioPath != null,
+        'text' => note.audioPath == null,
+        _ => true,
+      };
+
+      return matchesSearch && matchesFormat;
     }).toList();
 
     final theme = Theme.of(context);
 
+      final audioCount = allNotes.where((n) => n.audioPath != null).length;
+      final textCount = allNotes.where((n) => n.audioPath == null).length;
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            HomeHeader(
-              totalNotes: allNotes.length,
-              isRecording: _isRecording,
-              recordDuration: _formatDuration(_recordDuration),
-              onSearchChanged: (val) => setState(() => _searchQuery = val),
-              onAddTextNote: _openAddTextNoteModal,
-            ),
+          HomeHeader(
+            totalNotes: allNotes.length,
+            audioNotesCount: audioCount,
+            textNotesCount: textCount,
+            isRecording: _isRecording,
+            recordDuration: _formatDuration(_recordDuration),
+            selectedFilter: _selectedFilter,
+            onFilterChanged: (filter) => setState(() => _selectedFilter = filter),
+            onSearchChanged: (val) => setState(() => _searchQuery = val),
+            onAddTextNote: _openAddTextNoteModal,
+          ),
             Expanded(
               child: notes.isEmpty
                   ? EmptyNotesView(isSearching: _searchQuery.isNotEmpty)
