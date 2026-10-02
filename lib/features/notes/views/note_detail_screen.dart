@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:second_brain/features/notes/views/widgets/note/audio_player_card.dart';
 import '../models/note_model.dart';
 import '../providers/notes_provider.dart';
 
@@ -234,51 +235,8 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
 
               const SizedBox(height: 16),
 
-              if (isAudioOnDisk) ...[
-  Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    decoration: BoxDecoration(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-        color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-      ),
-    ),
-    child: Row(
-      children: [
-        IconButton.filled(
-          icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-          onPressed: () => _handlePlayAudio(currentNote.audioPath!),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _isPlaying ? 'Ses Kaydı Oynatılıyor' : 'Kayıtlı Sesi Dinle',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Orijinal ses kaydı',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Icon(
-          Icons.graphic_eq_rounded,
-          color: _isPlaying
-              ? theme.colorScheme.primary
-              : theme.colorScheme.onSurface.withValues(alpha: 0.3),
-        ),
-      ],
-    ),
-  ),
+if (isAudioOnDisk) ...[
+  AudioPlayerCard(audioPath: currentNote.audioPath!),
   const SizedBox(height: 16),
 ]
 // 2. Ses yolu var ama fiziksel dosya silinmişse: Bilgilendirme Rozeti

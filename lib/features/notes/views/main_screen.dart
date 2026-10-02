@@ -20,7 +20,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     // Sekmeler
     final pages = [
       const HomeScreen(),
-      const TopicsScreen(),
+      const JournalScreen(),
       const BrainAiScreen(),
       const SettingsScreen(),
     ];
